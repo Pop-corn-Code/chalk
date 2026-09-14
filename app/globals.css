@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #212f3d;
+  --bg-panel: #1a2530;
+  --chalk: #f3f0e7;
+  --chalk-dim: #9fadb8;
+  --chalk-faint: rgba(243, 240, 231, 0.14);
+  --yellow: #e7b23a;
+  --coral: #e2694e;
+  --sage: #7fb29a;
+}
+
+.light {
+  --bg: #f3efe6;
+  --bg-panel: #ffffff;
+  --chalk: #26313c;
+  --chalk-dim: #6b7680;
+  --chalk-faint: rgba(38, 49, 60, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(243, 240, 231, 0.05) 1px, transparent 1px),
+    radial-gradient(1px 1px at 70% 65%, rgba(243, 240, 231, 0.04) 1px, transparent 1px),
+    radial-gradient(1px 1px at 45% 80%, rgba(243, 240, 231, 0.05) 1px, transparent 1px);
+  background-size: 180px 180px;
+  color: var(--chalk);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+::selection {
+  background: var(--yellow);
+  color: #1a2530;
+}
+
+:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--yellow);
+  color: #1a2530;
+  padding: 10px 16px;
+  border-radius: 3px;
+  z-index: 100;
+  font-size: 14px;
+  font-weight: 600;
+}
+.skip-link:focus {
+  left: 12px;
+  top: 12px;
+}
+
+textarea::placeholder {
+  color: rgba(159, 173, 184, 0.7);
+}
