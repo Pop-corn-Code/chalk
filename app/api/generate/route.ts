@@ -30,7 +30,7 @@ function extractJson(text: string): any {
 
 export async function POST(req: NextRequest) {
   const clientKey = getClientKey(req.headers);
-  const rate = checkRateLimit(clientKey);
+  const rate = await checkRateLimit(clientKey);
   if (!rate.allowed) {
     return NextResponse.json<GenerateErrorResponse>(
       { error: 'Too many requests. Please wait a moment and try again.' },

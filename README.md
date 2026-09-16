@@ -52,7 +52,16 @@ prototype. Two things now run for real instead of being mocked:
      `supabase/schema.sql`), and `components/Avatar.tsx` shows the real
      photo instead of colored initials when one's available.
 
-4. **Install and run**
+4. **Rate limiting** (optional — works without it, see the status table below)
+   - Create a free database at [console.upstash.com](https://console.upstash.com)
+     (Redis → Create Database).
+   - Copy `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` from the
+     database's REST API section into `.env.local`.
+   - Skip this and the app still works — `/api/generate` falls back to a
+     simple in-memory limiter (see `lib/rateLimit.ts`), which is fine for
+     local dev and a single-instance deployment.
+
+5. **Install and run**
    ```bash
    npm install
    npm run dev
@@ -73,7 +82,7 @@ arrive). Google: click through the consent screen, no email needed.
 | User profile | **Real.** `profiles` table, one row per user, created automatically on signup. |
 | History | **Real.** `history` table, row-level security scoped to `auth.uid()` — a user can only ever query their own rows, enforced by Postgres. |
 | Delete account | **Real.** `app/api/account/delete/route.ts` deletes the `auth.users` row; `profiles` and `history` cascade-delete with it. |
-| Per-IP rate limiting | **Partial.** In-memory (see `lib/rateLimit.ts`) — works, but won't hold up across multiple server instances. Fine for a single server or low traffic; swap for Upstash Redis before it matters. |
+| Per-IP rate limiting | **Real, when Upstash is configured.** Falls back to a single-instance in-memory limiter otherwise (see `lib/rateLimit.ts`) — the app works either way, but only the Upstash-backed version holds up across multiple serverless instances. |
 | Pricing / usage meter | **Demo.** Calculated correctly and live from real attempts and text length, but nothing is actually charged, and it isn't persisted — it resets on refresh even when signed in. See "Next steps" to make this real. |
 | Terms / Privacy pages | **Template.** Accurate to what this codebase does, but not reviewed by a lawyer. Update before real use. |
 
@@ -124,11 +133,16 @@ supabase/schema.sql        run this in the Supabase SQL editor — tables + RLS 
 - Add a Stripe Checkout / Customer Portal flow so users can add a payment
   method once they exceed the free tier.
 
-### 2. Real rate limiting — Upstash Redis
+### 2. Production email — connect real SMTP
 
-- `lib/rateLimit.ts` is in-memory and per-instance. Swap it for
-  `@upstash/ratelimit` + `@upstash/redis` (a few lines) so limits hold across
-  serverless instances and restarts.
+- Supabase's built-in email service is for development only: low rate
+  limits, and mail often lands in spam since it's sent from a shared
+  Supabase domain, not yours.
+- In Supabase: Authentication → Emails → SMTP Settings, connect a real
+  provider (Resend, Postmark, and AWS SES are common choices; Resend has
+  the simplest setup and a usable free tier).
+- While you're there, Authentication → Email Templates lets you replace
+  the default magic-link email with branded copy.
 
 ### 3. Content moderation
 
