@@ -5,7 +5,7 @@ Turn dense text into a few simple, sketch-style visual explanations.
 This is a Next.js (App Router + TypeScript + Tailwind) port of a static HTML
 prototype. Two things now run for real instead of being mocked:
 
-- **The Anthropic call happens on the server** (`app/api/generate/route.ts`),
+- **The Gemini call happens on the server** (`app/api/generate/route.ts`),
   so the API key never reaches the browser.
 - **Auth and search history are backed by Supabase** (Postgres + Auth), with
   row-level security enforcing that a user can only ever see their own data
@@ -13,10 +13,15 @@ prototype. Two things now run for real instead of being mocked:
 
 ## Quick start
 
-1. **Anthropic key**
+1. **Gemini key**
    ```bash
    cp .env.example .env.local
-   # set ANTHROPIC_API_KEY=sk-ant-... in .env.local
+   # set GEMINI_API_KEY=... in .env.local — get one free at
+   # https://aistudio.google.com/apikey
+   #
+   # Note: this is a different credential from the Google OAuth Client
+   # ID/Secret used for "Sign in with Google" (step 3 below) — that one
+   # can't be used here, and vice versa.
    ```
 
 2. **Supabase project**
@@ -76,7 +81,7 @@ arrive). Google: click through the consent screen, no email needed.
 
 | Feature | Status |
 |---|---|
-| Generating explanations | **Real.** Calls Anthropic via a server route. |
+| Generating explanations | **Real.** Calls Gemini via a server route, with schema-constrained JSON output. |
 | API key handling | **Real.** Server-side only, never sent to the client. |
 | Sign in | **Real.** Supabase Auth — passwordless magic link, or Google. No passwords stored anywhere. |
 | User profile | **Real.** `profiles` table, one row per user, created automatically on signup. |
@@ -97,7 +102,7 @@ app/
   terms/page.tsx           static
   privacy/page.tsx          static
   api/
-    generate/route.ts        server-side Anthropic call
+    generate/route.ts        server-side Gemini call
     account/delete/route.ts    deletes a user's account (service role)
   auth/
     callback/route.ts          exchanges the magic-link code for a session
@@ -160,8 +165,8 @@ supabase/schema.sql        run this in the Supabase SQL editor — tables + RLS 
 
 This is a standard Next.js app — deploys to Vercel with zero config
 (`vercel deploy`), or anywhere else that runs Node (Render, Railway, a plain
-VPS with `npm run build && npm start`). Set all five env vars from
-`.env.example` on whatever platform you use — `ANTHROPIC_API_KEY` and
+VPS with `npm run build && npm start`). Set all the env vars from
+`.env.example` on whatever platform you use — `GEMINI_API_KEY` and
 `SUPABASE_SERVICE_ROLE_KEY` must stay server-side only, never committed and
 never given a `NEXT_PUBLIC_` prefix.
 

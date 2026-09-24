@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <h2 className="font-display text-lg font-semibold mt-9 mb-2.5">What Chalk collects</h2>
       <p className="text-[14.5px] leading-relaxed text-chalk-dim">
         In this codebase, Chalk doesn&apos;t require a verified account by default, doesn&apos;t use cookies, and the
-        text you paste is sent to the Anthropic API only to generate a response — it isn&apos;t stored in a database
+        text you paste is sent to the Gemini API only to generate a response — it isn&apos;t stored in a database
         unless you&apos;ve added one (see the README). If you add Supabase auth and a history table, update this
         section to describe exactly what gets stored and for how long.
       </p>
@@ -28,7 +28,7 @@ export default function PrivacyPage() {
           </tr>
           <tr>
             <td className="px-3 py-2.5 border-b border-chalk-faint text-chalk-dim">The text you paste</td>
-            <td className="px-3 py-2.5 border-b border-chalk-faint text-chalk-dim">Sent from our server to Anthropic&apos;s API to generate a simplified explanation, then discarded once the result is shown to you</td>
+            <td className="px-3 py-2.5 border-b border-chalk-faint text-chalk-dim">Sent from our server to Google&apos;s Gemini API to generate a simplified explanation, then discarded once the result is shown to you</td>
           </tr>
           <tr>
             <td className="px-3 py-2.5 border-b border-chalk-faint text-chalk-dim">Standard technical data</td>
@@ -39,8 +39,8 @@ export default function PrivacyPage() {
 
       <h2 className="font-display text-lg font-semibold mt-9 mb-2.5">Third-party processing</h2>
       <p className="text-[14.5px] leading-relaxed text-chalk-dim">
-        Chalk uses Anthropic&apos;s Claude API to generate explanations, called from our server (not your browser).
-        Text you submit is processed by Anthropic under its own terms and privacy policy. If you paste confidential,
+        Chalk uses Google&apos;s Gemini API to generate explanations, called from our server (not your browser).
+        Text you submit is processed by Google under its own terms and privacy policy. If you paste confidential,
         sensitive, or personal information, it will be transmitted to that third party — please avoid doing so.
       </p>
 

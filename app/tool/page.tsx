@@ -170,7 +170,7 @@ export default function ToolPage() {
         </p>
       </div>
 
-      <div className="grid md:grid-cols-[360px_1fr] gap-7 items-start">
+      <div className="grid md:grid-cols-[360px_1fr] gap-7 items-stretch">
         <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5.5">
           <label htmlFor="inputText" className="block text-[13px] text-chalk-dim mb-2.5">Your text</label>
           <textarea
@@ -236,9 +236,9 @@ export default function ToolPage() {
           {savedNote && <p className="mt-3.5 text-[12.5px] text-sage">Saved to your history.</p>}
         </section>
 
-        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5.5 min-h-[320px]">
+        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5.5 min-h-[320px] flex flex-col">
           {loading ? (
-            <div className="min-h-[320px] flex flex-col items-center justify-center gap-3.5 text-chalk-dim text-sm">
+            <div className="flex-1 min-h-[320px] flex flex-col items-center justify-center gap-3.5 text-chalk-dim text-sm">
               <div className="flex gap-2">
                 <span className="w-2 h-2 rounded-full bg-yellow animate-bounce" />
                 <span className="w-2 h-2 rounded-full bg-coral animate-bounce [animation-delay:150ms]" />
@@ -277,7 +277,7 @@ export default function ToolPage() {
               </div>
             </>
           ) : (
-            <div className="min-h-[320px] flex flex-col items-center justify-center text-center gap-3 text-chalk-dim px-5">
+            <div className="flex-1 min-h-[320px] flex flex-col items-center justify-center text-center gap-3 text-chalk-dim px-5">
               <svg width={56} height={56} viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth={4} strokeLinecap="round" className="opacity-50">
                 <path d="M20 70 L20 30 Q20 20 30 20 L70 20 Q80 20 80 30 L80 55 Q80 65 70 65 L40 65 L25 78 L28 65 Z" />
               </svg>
