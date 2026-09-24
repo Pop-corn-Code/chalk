@@ -1,15 +1,17 @@
 export const metadata = { title: 'Privacy — Chalk' };
 
 export default function PrivacyPage() {
-  
-  const contactMail = process.env.CONTACT_MAIL || 'support@chalk.ai';
-
   return (
-    <div className="max-w-[740px] mx-auto px-1 pt-6 pb-24">
+    <div className="max-w-[640px] mx-auto px-6 pt-6 pb-24">
       <h1 className="font-display text-[30px] mt-5 mb-1">Privacy Policy</h1>
       <p className="text-chalk-dim text-[13px] mb-7">Last updated: September 8, 2026</p>
 
-     
+      <div className="bg-bg-panel border border-dashed border-coral rounded-chalk px-4 py-4 text-[13px] leading-relaxed text-chalk-dim mb-9">
+        <strong className="text-chalk">This is a starting template, not legal advice.</strong> Privacy law varies by
+        region (GDPR, CCPA, and others each impose different requirements). Have a qualified attorney review this
+        before launch, and update it to match exactly what your deployed app does and where your users are.
+      </div>
+
       <h2 className="font-display text-lg font-semibold mt-9 mb-2">What Chalk collects</h2>
       <p className="text-[14px] leading-relaxed text-chalk-dim">
         In this codebase, Chalk doesn&apos;t require a verified account by default, doesn&apos;t use cookies, and the

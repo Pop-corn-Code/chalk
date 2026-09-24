@@ -171,7 +171,7 @@ export default function ToolPage() {
       </div>
 
       <div className="grid md:grid-cols-[360px_1fr] gap-7 items-stretch">
-        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5.5">
+        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5">
           <label htmlFor="inputText" className="block text-[13px] text-chalk-dim mb-2.5">Your text</label>
           <textarea
             id="inputText"
@@ -236,7 +236,7 @@ export default function ToolPage() {
           {savedNote && <p className="mt-3.5 text-[12.5px] text-sage">Saved to your history.</p>}
         </section>
 
-        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5.5 min-h-[320px] flex flex-col">
+        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5 min-h-[320px] flex flex-col">
           {loading ? (
             <div className="flex-1 min-h-[320px] flex flex-col items-center justify-center gap-3.5 text-chalk-dim text-sm">
               <div className="flex gap-2">

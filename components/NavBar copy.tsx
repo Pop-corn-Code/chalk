@@ -33,7 +33,9 @@ export default function NavBar() {
       <div className="hidden md:flex items-center gap-6 text-[14.5px] text-chalk-dim">
         <Link href="/" className="hover:text-chalk">Home</Link>
         <Link href="/tool" className="hover:text-chalk">Try it</Link>
+        {/* <Link href="/pricing" className="hover:text-chalk">Pricing</Link> */}
         <Link href="/terms" className="hover:text-chalk">Terms</Link>
+        <Link href="/privacy" className="hover:text-chalk">Privacy</Link>
 
         <button
           onClick={toggleTheme}
