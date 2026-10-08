@@ -27,7 +27,7 @@ create policy "Users can view their own profile"
   using (auth.uid() = id);
 
 create policy "Users can update their own profile"
-  on public.profiles for update
+  on public.profiles for update 
   using (auth.uid() = id);
 
 -- Automatically create a profile row whenever a new user signs up, whether
