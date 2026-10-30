@@ -4,6 +4,8 @@ export interface Concept {
   icon: string; // sanitized inner SVG markup, no outer <svg> tag
 }
 
+export type PlanId = 'free' | 'pro' | 'business';
+
 export interface User {
   id: string; // auth.users.id (uuid)
   name: string;
@@ -12,6 +14,23 @@ export interface User {
   color: string;
   avatarUrl: string | null; // from Google OAuth, if signed in that way
   joinedAt: string; // ISO string, from auth.users.created_at
+  plan: PlanId;
+  subscriptionStatus: string | null; // Stripe's status string, e.g. "active", "past_due", "canceled"
+}
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string; // shown in the UI — the full key is only ever shown once, at creation
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface PersistedUsageEvent {
+  id: string;
+  charCount: number;
+  billable: boolean;
+  createdAt: string;
 }
 
 export interface HistoryItem {
@@ -20,6 +39,7 @@ export interface HistoryItem {
   title: string;
   concepts: Concept[];
   createdAt: string; // ISO string
+  shareSlug: string | null; // non-null once shared; powers /share/[slug]
 }
 
 export interface UsageEntry {
@@ -36,4 +56,5 @@ export interface GenerateResponse {
 
 export interface GenerateErrorResponse {
   error: string;
+  code?: 'LIMIT_REACHED';
 }

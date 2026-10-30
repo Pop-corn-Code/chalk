@@ -1,138 +1,177 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAppState } from '@/lib/AppStateContext';
-import { PRICING, estimateCost, formatCurrency } from '@/lib/pricing';
+import { PLANS } from '@/lib/plans';
 
 function CheckIcon({ color }: { color: string }) {
   return (
-    <svg width={14} height={14} viewBox="0 0 100 100" fill="none" stroke={color} strokeWidth={10} strokeLinecap="round" className="flex-shrink-0 mt-0">
+    <svg width={14} height={14} viewBox="0 0 100 100" fill="none" stroke={color} strokeWidth={10} strokeLinecap="round" className="flex-shrink-0 mt-0.5">
       <path d="M20 55 L40 75 L82 25" />
     </svg>
   );
 }
 
-export default function PricingPage() {
-  const { usage, sessionUsageTotal } = useAppState();
-  const [calcLength, setCalcLength] = useState(1000);
-  const [calcAttempts, setCalcAttempts] = useState(3);
+const FAQ = [
+  {
+    q: 'What counts as one "explanation"?',
+    a: 'Each time you click "Turn into pictures" and get a result back, that\'s one explanation, regardless of how many concept cards it produces. Failed requests that return an error don\'t count.',
+  },
+  {
+    q: 'When do limits reset?',
+    a: 'On the first day of each calendar month (UTC). Unused explanations don\'t roll over.',
+  },
+  {
+    q: 'Can I cancel any time?',
+    a: 'Yes. Use "Manage billing" on your profile to cancel or change plans — it takes you to Stripe\'s billing portal. Cancelling takes effect at the end of the period you\'ve already paid for.',
+  },
+  {
+    q: 'What happens to my saved history if I downgrade?',
+    a: 'Nothing — your saved explanations and share links stay exactly as they are. Only the monthly generation limit changes.',
+  },
+  {
+    q: 'How does API access work?',
+    a: 'Pro and Business plans can create API keys from the profile page and call POST /api/v1/generate with the same usage limits as the web app.',
+  },
+];
 
-  const freeUsed = Math.min(calcAttempts, PRICING.freeAttempts);
-  const paidAttempts = Math.max(calcAttempts - PRICING.freeAttempts, 0);
-  const perPaidAttempt = estimateCost(calcLength).total;
-  const calcTotal = paidAttempts * perPaidAttempt;
+export default function PricingPage() {
+  const { user, monthlyUsage, startCheckout, openBillingPortal, openSignin } = useAppState();
+  const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  async function handleSubscribe(planId: 'pro' | 'business') {
+    if (!user) {
+      openSignin('/pricing');
+      return;
+    }
+    setBusyPlan(planId);
+    setError(null);
+    const result = await startCheckout(planId);
+    if (result.error) {
+      setError(result.error);
+      setBusyPlan(null);
+    }
+    // On success the browser navigates to Stripe — nothing more to do here.
+  }
+
+  async function handlePortal() {
+    setBusyPlan('portal');
+    setError(null);
+    const result = await openBillingPortal();
+    if (result.error) {
+      setError(result.error);
+      setBusyPlan(null);
+    }
+  }
 
   return (
-    <div className="max-w-[900px] mx-auto px-6 pt-6 pb-24">
-      <div className="mb-9">
-        <h1 className="font-display text-[32px] font-bold mb-2">Pricing</h1>
-        <p className="text-chalk-dim text-[15px] max-w-[58ch] leading-relaxed">
-          Chalk&apos;s cost has two parts: a small fee per attempt (each time you generate an explanation), and a fee
-          based on how much text you&apos;re asking it to read. Short texts and fewer attempts cost less.
+    <div className="max-w-[980px] mx-auto px-6 pt-6 pb-24">
+      <div className="mb-10 text-center">
+        <h1 className="font-display text-[34px] font-bold mb-3">Simple pricing</h1>
+        <p className="text-chalk-dim text-[15px] max-w-[52ch] mx-auto leading-relaxed">
+          Start free. Upgrade when you need more explanations, or want to call Chalk from your own tools.
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-5 mb-11">
-        <div className="bg-bg-panel border border-chalk-faint rounded-chalk p-6">
-          <p className="text-[15px] font-semibold text-chalk-dim uppercase tracking-wide mb-2">Free</p>
-          <p className="font-display text-[30px] font-bold mb-1">$0 <span className="text-sm text-chalk-dim font-medium">/ session</span></p>
-          <p className="text-[13px] text-chalk-dim mb-4">Your first {PRICING.freeAttempts} attempts, any length up to 6,000 characters.</p>
-          <ul className="flex flex-col gap-2 list-none p-0 m-0">
-            <li className="text-[13px] text-chalk-dim flex gap-2 leading-snug"><CheckIcon color="#7FB29A" />{PRICING.freeAttempts} free attempts per browser session</li>
-            <li className="text-[13px] text-chalk-dim flex gap-2 leading-snug"><CheckIcon color="#7FB29A" />Up to 6,000 characters per attempt</li>
-            <li className="text-[13px] text-chalk-dim flex gap-2 leading-snug"><CheckIcon color="#7FB29A" />Resets when you refresh the page</li>
-          </ul>
-        </div>
-        <div className="bg-bg-panel border border-yellow rounded-chalk p-6">
-          <p className="text-[15px] font-semibold text-chalk-dim uppercase tracking-wide mb-2">Pay as you go</p>
-          <p className="font-display text-[30px] font-bold mb-1">
-            {formatCurrency(PRICING.attemptFee)} <span className="text-sm text-chalk-dim font-medium">/ attempt</span>
-          </p>
-          <p className="text-[13px] text-chalk-dim mb-4">Kicks in automatically after your {PRICING.freeAttempts} free attempts.</p>
-          <ul className="flex flex-col gap-2 list-none p-0 m-0">
-            <li className="text-[13px] text-chalk-dim flex gap-2 leading-snug"><CheckIcon color="#E7B23A" />{formatCurrency(PRICING.attemptFee)} base fee, every attempt</li>
-            <li className="text-[13px] text-chalk-dim flex gap-2 leading-snug"><CheckIcon color="#E7B23A" />+ {formatCurrency(PRICING.per500Chars)} for every 500 characters of input</li>
-            <li className="text-[13px] text-chalk-dim flex gap-2 leading-snug"><CheckIcon color="#E7B23A" />No subscription, no minimum</li>
-          </ul>
-        </div>
-      </div>
+      <div className="grid md:grid-cols-3 gap-5 mb-6">
+        {PLANS.map((plan) => {
+          const isCurrent = user?.plan === plan.id;
+          const highlight = plan.id === 'pro';
+          return (
+            <div
+              key={plan.id}
+              className={`bg-bg-panel border rounded-chalk p-6 flex flex-col ${highlight ? 'border-yellow' : 'border-chalk-faint'}`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[14px] font-semibold text-chalk-dim uppercase tracking-wide">{plan.name}</p>
+                {highlight && (
+                  <span className="text-[10.5px] font-semibold text-[#1A2530] bg-yellow rounded-full px-2 py-0.5">Most popular</span>
+                )}
+              </div>
+              <p className="font-display text-[32px] font-bold mb-5">{plan.priceLabel}</p>
+              <ul className="flex flex-col gap-2.5 list-none p-0 m-0 mb-6 flex-1">
+                {plan.features.map((f) => (
+                  <li key={f} className="text-[13.5px] text-chalk-dim flex gap-2 leading-snug">
+                    <CheckIcon color={highlight ? '#E7B23A' : '#7FB29A'} />
+                    {f}
+                  </li>
+                ))}
+              </ul>
 
-      <div className="bg-bg-panel border border-chalk-faint rounded-chalk p-6 mb-10">
-        <h2 className="font-display text-[17px] font-semibold mb-1">Cost calculator</h2>
-        <p className="text-chalk-dim text-[13px] mb-5">Drag these to estimate what a session would cost.</p>
-        <div className="grid md:grid-cols-2 gap-6 mb-5">
-          <div>
-            <label className="flex justify-between text-[13px] text-chalk-dim mb-2">
-              Text length <strong className="text-chalk font-semibold">{calcLength.toLocaleString()} characters</strong>
-            </label>
-            <input
-              type="range"
-              min={100}
-              max={6000}
-              step={50}
-              value={calcLength}
-              onChange={(e) => setCalcLength(Number(e.target.value))}
-              className="w-full accent-yellow"
-            />
-          </div>
-          <div>
-            <label className="flex justify-between text-[13px] text-chalk-dim mb-2">
-              Attempts this session <strong className="text-chalk font-semibold">{calcAttempts}</strong>
-            </label>
-            <input
-              type="range"
-              min={1}
-              max={30}
-              step={1}
-              value={calcAttempts}
-              onChange={(e) => setCalcAttempts(Number(e.target.value))}
-              className="w-full accent-yellow"
-            />
-          </div>
-        </div>
-        <div className="flex items-baseline gap-2 border-t border-dashed border-chalk-faint pt-4 flex-wrap">
-          <div className="font-display text-[28px] font-bold">{formatCurrency(calcTotal)}</div>
-          <div className="text-[12px] text-chalk-dim">
-            {paidAttempts === 0
-              ? `All ${calcAttempts} attempt${calcAttempts === 1 ? '' : 's'} covered by the free tier`
-              : `${freeUsed} free + ${paidAttempts} paid at ${formatCurrency(perPaidAttempt)} each`}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-bg-panel border border-chalk-faint rounded-chalk p-5">
-        <h2 className="font-display text-base font-semibold mb-1">Your usage this session</h2>
-        <p className="text-[12px] text-chalk-dim mb-4">Live — based on what you&apos;ve actually generated in the tool. Resets on refresh, and nothing is really charged.</p>
-        {usage.length === 0 ? (
-          <div className="text-chalk-dim text-sm border border-dashed border-chalk-faint rounded-chalk p-8 text-center">
-            No attempts yet this session.{' '}
-            <a href="/tool" className="text-yellow no-underline">Try the tool</a> and this fills in.
-          </div>
-        ) : (
-          <>
-            <div className="flex flex-col gap-1 text-[12px]">
-              {usage.map((u) => (
-                <div key={u.num} className="flex justify-between py-2 border-b border-chalk-faint text-chalk-dim">
-                  <span className="text-chalk">Attempt {u.num} — {u.charCount.toLocaleString()} chars</span>
-                  <span className={u.free ? 'text-sage font-semibold' : 'text-coral font-semibold'}>
-                    {u.free ? 'Free' : formatCurrency(u.cost)}
-                  </span>
-                </div>
-              ))}
+              {plan.id === 'free' ? (
+                isCurrent ? (
+                  <div className="text-center text-[13px] text-chalk-dim border border-chalk-faint rounded-chalk py-2.5">Current plan</div>
+                ) : (
+                  <Link href="/tool" className="text-center text-[13.5px] font-semibold border border-chalk-faint rounded-chalk py-2.5 hover:border-chalk-dim">
+                    Start free
+                  </Link>
+                )
+              ) : isCurrent ? (
+                <button
+                  onClick={handlePortal}
+                  disabled={busyPlan === 'portal'}
+                  className="text-[13.5px] font-semibold border border-chalk-faint rounded-chalk py-2.5 hover:border-chalk-dim disabled:opacity-60"
+                >
+                  {busyPlan === 'portal' ? 'Opening…' : 'Manage billing'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleSubscribe(plan.id as 'pro' | 'business')}
+                  disabled={busyPlan === plan.id}
+                  className={`text-[13.5px] font-semibold rounded-chalk py-2.5 disabled:opacity-60 ${
+                    highlight ? 'bg-yellow text-[#1A2530]' : 'border border-chalk-faint hover:border-chalk-dim'
+                  }`}
+                >
+                  {busyPlan === plan.id ? 'Redirecting…' : `Choose ${plan.name}`}
+                </button>
+              )}
             </div>
-            <div className="flex justify-between pt-3 text-sm font-semibold">
-              <span>Total this session</span>
-              <span>{formatCurrency(sessionUsageTotal())}</span>
-            </div>
-          </>
-        )}
+          );
+        })}
       </div>
 
-      <p className="mt-10 text-[12px] text-chalk-dim leading-relaxed border-t border-dashed border-chalk-faint pt-5">
-        This pricing is illustrative for the demo — it shows what a real usage-based plan could look like, calculated
-        live from your actual attempts and text length. No payment is collected and no card is required anywhere in
-        this app. See the README for how to wire this up to real Stripe metered billing.
-      </p>
+      {error && <p className="text-coral text-[13px] text-center mb-6">{error}</p>}
+
+      {user && monthlyUsage && (
+        <div className="bg-bg-panel border border-chalk-faint rounded-chalk p-5 mb-12">
+          <div className="flex items-center justify-between mb-2.5 text-[13px]">
+            <span className="text-chalk-dim">Your usage this month</span>
+            <span className="font-semibold">
+              {monthlyUsage.cap === null ? `${monthlyUsage.used} used · unlimited` : `${monthlyUsage.used} of ${monthlyUsage.cap}`}
+            </span>
+          </div>
+          {monthlyUsage.cap !== null && (
+            <div className="h-1.5 rounded-full bg-chalk-faint overflow-hidden">
+              <div
+                className="h-full bg-yellow"
+                style={{ width: `${Math.min(100, (monthlyUsage.used / monthlyUsage.cap) * 100)}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="max-w-[680px] mx-auto">
+        <h2 className="font-display text-[22px] font-semibold mb-5">Questions</h2>
+        <div className="flex flex-col">
+          {FAQ.map((item, i) => (
+            <div key={item.q} className="border-b border-chalk-faint">
+              <button
+                onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                aria-expanded={openFaq === i}
+                className="w-full flex justify-between items-center text-left py-4 text-[14.5px] font-medium"
+              >
+                {item.q}
+                <span className="text-chalk-dim ml-4">{openFaq === i ? '−' : '+'}</span>
+              </button>
+              {openFaq === i && <p className="text-[13.5px] text-chalk-dim leading-relaxed pb-4">{item.a}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

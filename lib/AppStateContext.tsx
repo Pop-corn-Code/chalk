@@ -1,20 +1,19 @@
 'use client';
 
-// User identity and search history are now backed by Supabase (Postgres +
-// Auth) instead of in-memory mock state — see supabase/schema.sql for the
-// tables and row-level security policies that make this safe.
+// User identity, search history, plan, and usage are all backed by
+// Supabase (Postgres + Auth) — see supabase/schema.sql for the tables and
+// row-level security policies that make this safe.
 //
-// Still in-memory / demo, deliberately out of scope for this change:
-// - `usage` (the pricing meter) — see lib/pricing.ts and the README's
-//   "Next steps" section for how to make that real with Stripe.
-// - `theme` — a per-visit preference, fine to keep client-only.
+// Still client-only / demo, deliberately: `theme`, a per-visit preference
+// with no reason to be durable.
 
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
-import type { User, HistoryItem, UsageEntry, Concept } from './types';
-import { PRICING, estimateCost, isFreeAttempt } from './pricing';
+import { generateApiKey } from '@/lib/apiKeys';
+import { getPlan, monthStartISO } from '@/lib/plans';
+import type { User, HistoryItem, ApiKey, PlanId, Concept } from './types';
 
 const ACCENTS = ['#E7B23A', '#E2694E', '#7FB29A'];
 
@@ -38,6 +37,7 @@ interface HistoryRow {
   title: string;
   concepts: Concept[];
   created_at: string;
+  share_slug: string | null;
 }
 
 function rowToHistoryItem(row: HistoryRow): HistoryItem {
@@ -47,7 +47,18 @@ function rowToHistoryItem(row: HistoryRow): HistoryItem {
     title: row.title,
     concepts: row.concepts,
     createdAt: row.created_at,
+    shareSlug: row.share_slug,
   };
+}
+
+// Short, URL-safe token for /share/[slug]. Not a security boundary by
+// itself — the UNIQUE constraint in the database is — just needs to be
+// hard to guess and unlikely to collide.
+function generateShareSlug(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID().replace(/-/g, '').slice(0, 10);
+  }
+  return Math.random().toString(36).slice(2, 12);
 }
 
 interface AppState {
@@ -55,7 +66,18 @@ interface AppState {
   authLoading: boolean;
   history: HistoryItem[];
   historyLoading: boolean;
-  usage: UsageEntry[];
+  monthlyUsage: { used: number; cap: number | null } | null;
+  monthlyUsageLoading: boolean;
+  refreshMonthlyUsage: () => Promise<void>;
+  apiKeys: ApiKey[];
+  apiKeysLoading: boolean;
+  /** Returns the full key exactly once — it can't be retrieved again after this. */
+  createApiKey: (name: string) => Promise<{ fullKey?: string; error?: string }>;
+  revokeApiKey: (id: string) => Promise<void>;
+  /** Redirects to Stripe Checkout on success. */
+  startCheckout: (planId: 'pro' | 'business') => Promise<{ error?: string }>;
+  /** Redirects to the Stripe Customer Portal on success. */
+  openBillingPortal: () => Promise<{ error?: string }>;
   theme: 'dark' | 'light';
   signinOpen: boolean;
   openSignin: (returnPath?: string) => void;
@@ -68,9 +90,10 @@ interface AppState {
   deleteAccount: () => Promise<{ error?: string }>;
   clearHistory: () => Promise<void>;
   toggleTheme: () => void;
-  logAttempt: (charCount: number) => UsageEntry;
   saveToHistory: (inputText: string, concepts: Concept[]) => Promise<void>;
-  sessionUsageTotal: () => number;
+  /** Generates a share_slug if the item doesn't have one yet, and returns the full public URL either way. */
+  shareHistoryItem: (id: string) => Promise<{ url?: string; error?: string }>;
+  unshareHistoryItem: (id: string) => Promise<void>;
 }
 
 const AppStateCtx = createContext<AppState | null>(null);
@@ -83,7 +106,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [usage, setUsage] = useState<UsageEntry[]>([]);
+  const [monthlyUsage, setMonthlyUsage] = useState<{ used: number; cap: number | null } | null>(null);
+  const [monthlyUsageLoading, setMonthlyUsageLoading] = useState(false);
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [apiKeysLoading, setApiKeysLoading] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [signinOpen, setSigninOpen] = useState(false);
   const [returnPath, setReturnPath] = useState('/tool');
@@ -94,26 +120,37 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   // (or the row doesn't exist for a brand-new user), we fall back to
   // user_metadata, which Google OAuth populates directly and magic-link
   // sign-in populates via the `data: { full_name }` we pass at sign-in time.
-  const buildUser = useCallback((supaUser: SupabaseUser, fallbackName?: string, fallbackAvatar?: string | null): User => {
-    const name = fallbackName || (supaUser.user_metadata?.full_name as string) || supaUser.email || 'You';
-    const avatarUrl = fallbackAvatar ?? (supaUser.user_metadata?.avatar_url as string | undefined) ?? null;
-    return {
-      id: supaUser.id,
-      name,
-      email: supaUser.email || '',
-      initials: initialsFor(name),
-      color: colorFor(supaUser.id),
-      avatarUrl,
-      joinedAt: supaUser.created_at,
-    };
-  }, []);
+  const buildUser = useCallback(
+    (
+      supaUser: SupabaseUser,
+      fallbackName?: string,
+      fallbackAvatar?: string | null,
+      plan?: PlanId,
+      subscriptionStatus?: string | null
+    ): User => {
+      const name = fallbackName || (supaUser.user_metadata?.full_name as string) || supaUser.email || 'You';
+      const avatarUrl = fallbackAvatar ?? (supaUser.user_metadata?.avatar_url as string | undefined) ?? null;
+      return {
+        id: supaUser.id,
+        name,
+        email: supaUser.email || '',
+        initials: initialsFor(name),
+        color: colorFor(supaUser.id),
+        avatarUrl,
+        joinedAt: supaUser.created_at,
+        plan: plan || 'free',
+        subscriptionStatus: subscriptionStatus ?? null,
+      };
+    },
+    []
+  );
 
   const loadHistory = useCallback(
     async (userId: string) => {
       setHistoryLoading(true);
       const { data, error } = await supabase
         .from('history')
-        .select('id, input_preview, title, concepts, created_at')
+        .select('id, input_preview, title, concepts, created_at, share_slug')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
       if (error) {
@@ -127,6 +164,53 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [supabase]
   );
 
+  const loadMonthlyUsage = useCallback(
+    async (userId: string, plan: PlanId) => {
+      setMonthlyUsageLoading(true);
+      const { count, error } = await supabase
+        .from('usage_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('created_at', monthStartISO());
+      if (error) {
+        console.error('Failed to load usage:', error);
+        setMonthlyUsage(null);
+      } else {
+        setMonthlyUsage({ used: count ?? 0, cap: getPlan(plan).monthlyAttempts });
+      }
+      setMonthlyUsageLoading(false);
+    },
+    [supabase]
+  );
+
+  const loadApiKeys = useCallback(
+    async (userId: string) => {
+      setApiKeysLoading(true);
+      const { data, error } = await supabase
+        .from('api_keys')
+        .select('id, name, key_prefix, created_at, last_used_at')
+        .eq('user_id', userId)
+        .is('revoked_at', null)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('Failed to load API keys:', error);
+        setApiKeys([]);
+      } else {
+        setApiKeys(
+          (data || []).map((row: any) => ({
+            id: row.id,
+            name: row.name,
+            keyPrefix: row.key_prefix,
+            createdAt: row.created_at,
+            lastUsedAt: row.last_used_at,
+          }))
+        );
+      }
+      setApiKeysLoading(false);
+    },
+    [supabase]
+  );
+
   // Initial session check + subscribe to sign-in/sign-out events.
   useEffect(() => {
     let active = true;
@@ -136,11 +220,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (supaUser) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('full_name, avatar_url')
+          .select('full_name, avatar_url, plan, subscription_status')
           .eq('id', supaUser.id)
           .single();
-        setUser(buildUser(supaUser, profile?.full_name, profile?.avatar_url));
+        const plan = (profile?.plan as PlanId) || 'free';
+        setUser(buildUser(supaUser, profile?.full_name, profile?.avatar_url, plan, profile?.subscription_status));
         loadHistory(supaUser.id);
+        loadMonthlyUsage(supaUser.id, plan);
+        loadApiKeys(supaUser.id);
       }
       setAuthLoading(false);
     });
@@ -152,14 +239,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('full_name, avatar_url')
+          .select('full_name, avatar_url, plan, subscription_status')
           .eq('id', session.user.id)
           .single();
-        setUser(buildUser(session.user, profile?.full_name, profile?.avatar_url));
+        const plan = (profile?.plan as PlanId) || 'free';
+        setUser(buildUser(session.user, profile?.full_name, profile?.avatar_url, plan, profile?.subscription_status));
         loadHistory(session.user.id);
+        loadMonthlyUsage(session.user.id, plan);
+        loadApiKeys(session.user.id);
       } else {
         setUser(null);
         setHistory([]);
+        setMonthlyUsage(null);
+        setApiKeys([]);
       }
     });
 
@@ -167,7 +259,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       active = false;
       subscription.unsubscribe();
     };
-  }, [supabase, buildUser, loadHistory]);
+  }, [supabase, buildUser, loadHistory, loadMonthlyUsage, loadApiKeys]);
 
   const openSignin = useCallback((path?: string) => {
     setReturnPath(path || '/tool');
@@ -208,6 +300,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setHistory([]);
+    setMonthlyUsage(null);
+    setApiKeys([]);
     router.push('/');
   }, [supabase, router]);
 
@@ -219,6 +313,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     setHistory([]);
+    setMonthlyUsage(null);
+    setApiKeys([]);
     return {};
   }, []);
 
@@ -240,7 +336,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase
         .from('history')
         .insert({ user_id: user.id, input_preview: inputPreview, title, concepts })
-        .select('id, input_preview, title, concepts, created_at')
+        .select('id, input_preview, title, concepts, created_at, share_slug')
         .single();
       if (error) {
         console.error('Failed to save history:', error);
@@ -251,24 +347,121 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [supabase, user]
   );
 
-  const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), []);
+  const shareHistoryItem = useCallback(
+    async (id: string): Promise<{ url?: string; error?: string }> => {
+      if (!user) return { error: 'Not signed in.' };
 
-  // Relies on the caller only invoking this once per attempt, synchronously
-  // before the API call — the tool page disables the generate button while
-  // a request is in flight, so there's no concurrent-call race here.
-  const logAttempt = useCallback(
-    (charCount: number): UsageEntry => {
-      const num = usage.length + 1;
-      const free = isFreeAttempt(num);
-      const cost = free ? 0 : estimateCost(charCount).total;
-      const entry: UsageEntry = { num, charCount, free, cost, at: new Date().toISOString() };
-      setUsage((prev) => [...prev, entry]);
-      return entry;
+      const existing = history.find((h) => h.id === id);
+      if (existing?.shareSlug) {
+        return { url: `${window.location.origin}/share/${existing.shareSlug}` };
+      }
+
+      const slug = generateShareSlug();
+      const { data, error } = await supabase
+        .from('history')
+        .update({ share_slug: slug })
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select('share_slug')
+        .single();
+
+      if (error || !data) {
+        console.error('Failed to share history item:', error);
+        return { error: 'Could not create a share link. Try again.' };
+      }
+
+      setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, shareSlug: data.share_slug } : h)));
+      return { url: `${window.location.origin}/share/${data.share_slug}` };
     },
-    [usage.length]
+    [supabase, user, history]
   );
 
-  const sessionUsageTotal = useCallback(() => usage.reduce((sum, u) => sum + u.cost, 0), [usage]);
+  const unshareHistoryItem = useCallback(
+    async (id: string) => {
+      if (!user) return;
+      const { error } = await supabase
+        .from('history')
+        .update({ share_slug: null })
+        .eq('id', id)
+        .eq('user_id', user.id);
+      if (error) {
+        console.error('Failed to unshare history item:', error);
+        return;
+      }
+      setHistory((prev) => prev.map((h) => (h.id === id ? { ...h, shareSlug: null } : h)));
+    },
+    [supabase, user]
+  );
+
+  const toggleTheme = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), []);
+
+  // Called by the tool page right after a successful generation, so the
+  // "X of Y used this month" display updates immediately rather than
+  // waiting for the next page load. The server (app/api/generate) is the
+  // one actually enforcing the limit and writing the usage_events row —
+  // this just re-reads the count to keep the UI in sync.
+  const refreshMonthlyUsage = useCallback(async () => {
+    if (!user) return;
+    await loadMonthlyUsage(user.id, user.plan);
+  }, [user, loadMonthlyUsage]);
+
+  const createApiKey = useCallback(
+    async (name: string): Promise<{ fullKey?: string; error?: string }> => {
+      if (!user) return { error: 'Not signed in.' };
+      const { fullKey, hash, prefix } = await generateApiKey();
+      const { error } = await supabase
+        .from('api_keys')
+        .insert({ user_id: user.id, name: name || 'Default key', key_hash: hash, key_prefix: prefix });
+      if (error) {
+        console.error('Failed to create API key:', error);
+        return { error: 'Could not create a key. Try again.' };
+      }
+      await loadApiKeys(user.id);
+      return { fullKey }; // shown once — not retrievable after this
+    },
+    [supabase, user, loadApiKeys]
+  );
+
+  const revokeApiKey = useCallback(
+    async (id: string) => {
+      if (!user) return;
+      const { error } = await supabase
+        .from('api_keys')
+        .update({ revoked_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('user_id', user.id);
+      if (error) {
+        console.error('Failed to revoke API key:', error);
+        return;
+      }
+      setApiKeys((prev) => prev.filter((k) => k.id !== id));
+    },
+    [supabase, user]
+  );
+
+  const startCheckout = useCallback(async (planId: 'pro' | 'business'): Promise<{ error?: string }> => {
+    const res = await fetch('/api/stripe/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: planId }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.url) {
+      return { error: body.error || 'Could not start checkout.' };
+    }
+    window.location.href = body.url; // Stripe-hosted Checkout — navigates away
+    return {};
+  }, []);
+
+  const openBillingPortal = useCallback(async (): Promise<{ error?: string }> => {
+    const res = await fetch('/api/stripe/portal', { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.url) {
+      return { error: body.error || 'Could not open the billing portal.' };
+    }
+    window.location.href = body.url;
+    return {};
+  }, []);
 
   return (
     <AppStateCtx.Provider
@@ -277,7 +470,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         authLoading,
         history,
         historyLoading,
-        usage,
+        monthlyUsage,
+        monthlyUsageLoading,
+        refreshMonthlyUsage,
+        apiKeys,
+        apiKeysLoading,
+        createApiKey,
+        revokeApiKey,
+        startCheckout,
+        openBillingPortal,
         theme,
         signinOpen,
         openSignin,
@@ -288,9 +489,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         deleteAccount,
         clearHistory,
         toggleTheme,
-        logAttempt,
         saveToHistory,
-        sessionUsageTotal,
+        shareHistoryItem,
+        unshareHistoryItem,
       }}
     >
       {children}
@@ -304,4 +505,3 @@ export function useAppState(): AppState {
   return ctx;
 }
 
-export { PRICING };

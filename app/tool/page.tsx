@@ -2,7 +2,6 @@
 
 import { useState, useRef } from 'react';
 import { useAppState } from '@/lib/AppStateContext';
-import { estimateCost, formatCurrency, isFreeAttempt, PRICING } from '@/lib/pricing';
 import type { Concept } from '@/lib/types';
 import IconSvg from '@/components/IconSvg';
 
@@ -14,17 +13,16 @@ const COOLDOWN_MS = 4000;
 const ACCENTS = ['#E7B23A', '#E2694E', '#7FB29A', '#F3F0E7'];
 
 export default function ToolPage() {
-  const { user, logAttempt, saveToHistory, sessionUsageTotal, usage, openSignin } = useAppState();
+  const { user, saveToHistory, openSignin, monthlyUsage, refreshMonthlyUsage } = useAppState();
 
   const [inputText, setInputText] = useState('');
   const [concepts, setConcepts] = useState<Concept[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [attemptNote, setAttemptNote] = useState<string | null>(null);
+  const [limitReached, setLimitReached] = useState(false);
   const [savedNote, setSavedNote] = useState(false);
   const lastRunAt = useRef(0);
 
-  const nextAttemptNum = usage.length + 1;
 
   async function handleGenerate() {
     const text = inputText.trim();
@@ -40,11 +38,10 @@ export default function ToolPage() {
     }
 
     setError(null);
+    setLimitReached(false);
     setSavedNote(false);
     setLoading(true);
     lastRunAt.current = now;
-
-    const attempt = logAttempt(text.slice(0, MAX_CHARS_SENT).length);
 
     let res: Response;
     try {
@@ -65,6 +62,7 @@ export default function ToolPage() {
       try {
         const body = await res.json();
         if (body?.error) message = body.error;
+        if (body?.code === 'LIMIT_REACHED') setLimitReached(true);
       } catch {
         // ignore — keep default message
       }
@@ -89,11 +87,7 @@ export default function ToolPage() {
           // show up on the profile page.
         }
       }
-      setAttemptNote(
-        attempt.free
-          ? `Free — attempt ${attempt.num} of ${PRICING.freeAttempts} used.`
-          : `${formatCurrency(attempt.cost)} charged for this attempt — session total ${formatCurrency(sessionUsageTotal() + attempt.cost)}.`
-      );
+      if (user) refreshMonthlyUsage();
     } catch (err) {
       console.error(err);
       setError("That text didn't come back in a format Chalk could use. Try shorter or simpler text.");
@@ -156,7 +150,6 @@ export default function ToolPage() {
 
   const charCount = inputText.length;
   const overLimit = charCount > MAX_CHARS_SENT;
-  const liveCost = nextAttemptNum > PRICING.freeAttempts && charCount > 0 ? estimateCost(charCount) : null;
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 pt-6 pb-20">
@@ -171,7 +164,7 @@ export default function ToolPage() {
       </div>
 
       <div className="grid md:grid-cols-[360px_1fr] gap-7 items-stretch">
-        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5">
+        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5.5">
           <label htmlFor="inputText" className="block text-[13px] text-chalk-dim mb-2.5">Your text</label>
           <textarea
             id="inputText"
@@ -186,17 +179,17 @@ export default function ToolPage() {
             {overLimit && ' — only the first 6,000 will be used'}
           </div>
 
-          <div className="text-[12.5px] text-chalk-dim mt-2.5 flex items-center gap-1.5 flex-wrap">
-            {nextAttemptNum <= PRICING.freeAttempts ? (
-              <>
-                <span className="font-semibold text-sage">Free</span> — attempt {nextAttemptNum} of {PRICING.freeAttempts} included
-              </>
-            ) : liveCost ? (
-              <>
-                <span className="font-semibold text-coral">{formatCurrency(liveCost.total)}</span> for this attempt ($0.03 base + {formatCurrency(liveCost.lengthFee)} for {charCount.toLocaleString()} characters)
-              </>
-            ) : null}
-          </div>
+          {user && monthlyUsage && (
+            <div className="text-[12.5px] text-chalk-dim mt-2.5">
+              {monthlyUsage.cap === null ? (
+                <>Unlimited explanations on your plan</>
+              ) : (
+                <>
+                  <span className="font-semibold text-chalk">{monthlyUsage.used}</span> of {monthlyUsage.cap} used this month
+                </>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-2.5 mt-3.5 flex-wrap">
             <button
@@ -216,15 +209,13 @@ export default function ToolPage() {
           </div>
 
           {error && <p className="mt-3 text-[13px] text-coral leading-relaxed">{error}</p>}
-
-          {attemptNote && !error && (
-            <p className="mt-3.5 text-[12.5px] text-chalk-dim">
-              {attemptNote}{' '}
-              <a href="/pricing" className="border-b border-dashed border-chalk-faint hover:text-chalk cursor-pointer">See pricing</a>
-            </p>
+          {limitReached && (
+            <a href="/pricing" className="inline-block mt-2.5 bg-yellow text-[#1A2530] font-semibold text-[13px] rounded-chalk px-3.5 py-2">
+              Upgrade to keep going
+            </a>
           )}
 
-          {!user && !attemptNote && (
+          {!user && (
             <p className="mt-3.5 text-[12.5px] text-chalk-dim leading-relaxed">
               Results aren&apos;t saved right now.{' '}
               <button onClick={() => openSignin('/tool')} className="border-b border-dashed border-chalk-faint hover:text-chalk">
@@ -236,7 +227,7 @@ export default function ToolPage() {
           {savedNote && <p className="mt-3.5 text-[12.5px] text-sage">Saved to your history.</p>}
         </section>
 
-        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5 min-h-[320px] flex flex-col">
+        <section className="bg-bg-panel border border-chalk-faint rounded-chalk p-5.5 min-h-[320px] flex flex-col">
           {loading ? (
             <div className="flex-1 min-h-[320px] flex flex-col items-center justify-center gap-3.5 text-chalk-dim text-sm">
               <div className="flex gap-2">

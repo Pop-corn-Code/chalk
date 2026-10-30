@@ -140,6 +140,63 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section className="px-6 py-14">
+        <div className="max-w-[1080px] mx-auto">
+          <h2 className="font-display text-[28px] font-semibold mb-2.5">Who it&apos;s for</h2>
+          <p className="text-chalk-dim text-[15.5px] max-w-[56ch] mb-10 leading-relaxed">
+            Anyone who&apos;s ever read a paragraph three times and still not been sure what it said.
+          </p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { t: 'Students', d: 'Turn dense textbook passages into something you can actually revise from.' },
+              { t: 'Legal & compliance', d: 'Get the gist of a clause before deciding whether to read the rest carefully.' },
+              { t: 'Non-native speakers', d: 'Check your understanding of complex English with pictures and plain wording.' },
+              { t: 'Teams & docs', d: 'Make internal specs and policies easier to onboard people with.' },
+            ].map((c) => (
+              <div key={c.t} className="border border-dashed border-chalk-faint rounded-chalk p-5">
+                <h3 className="font-display text-[16px] font-semibold mb-1.5">{c.t}</h3>
+                <p className="text-[13.5px] text-chalk-dim leading-relaxed">{c.d}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-6 py-14">
+        <div className="max-w-[720px] mx-auto">
+          <h2 className="font-display text-[28px] font-semibold mb-6">Questions</h2>
+          <div className="flex flex-col">
+            {[
+              {
+                q: 'Is Chalk a substitute for reading the original?',
+                a: "No. It's a way to get oriented quickly. Simplifying always loses nuance, so for legal, medical, or financial decisions, check the original text.",
+              },
+              {
+                q: 'What happens to the text I paste?',
+                a: "It's sent to Google's Gemini API to generate the explanation. Avoid pasting confidential or sensitive material. The Privacy page has the details.",
+              },
+              {
+                q: 'Do I need an account?',
+                a: 'No — you can try it without one. An account lets you save and share explanations, and track your usage.',
+              },
+              {
+                q: 'How much does it cost?',
+                a: 'There is a free tier, and paid plans for higher limits and API access. See the pricing page for current plans.',
+              },
+            ].map((item) => (
+              <details key={item.q} className="group border-b border-chalk-faint py-4">
+                <summary className="cursor-pointer list-none flex justify-between items-center text-[15px] font-medium">
+                  {item.q}
+                  <span className="text-chalk-dim ml-4 group-open:hidden">+</span>
+                  <span className="text-chalk-dim ml-4 hidden group-open:inline">−</span>
+                </summary>
+                <p className="text-[14px] text-chalk-dim leading-relaxed mt-3">{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="text-center px-6 py-16">
         <h2 className="font-display text-[30px] font-bold mb-3.5">Stop re-reading the same paragraph.</h2>
         <p className="text-chalk-dim mb-7">It&apos;s free to try and takes less time than reading this sentence twice.</p>

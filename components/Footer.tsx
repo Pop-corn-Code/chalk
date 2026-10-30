@@ -7,7 +7,9 @@ export default function Footer() {
         <div className="text-[13px] text-chalk-dim">© 2026 Chalk. A small tool for making dense text make sense.</div>
         <div className="flex gap-5 text-[13.5px] text-chalk-dim">
           <Link href="/tool" className="hover:text-chalk">Open the app</Link>
+          <Link href="/pricing" className="hover:text-chalk">Pricing</Link>
           <Link href="/terms" className="hover:text-chalk">Terms</Link>
+          <Link href="/privacy" className="hover:text-chalk">Privacy</Link>
         </div>
       </div>
     </footer>

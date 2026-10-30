@@ -66,7 +66,16 @@ prototype. Two things now run for real instead of being mocked:
      simple in-memory limiter (see `lib/rateLimit.ts`), which is fine for
      local dev and a single-instance deployment.
 
-5. **Install and run**
+5. **Stripe** (optional until you want to charge — everything else works without it)
+   - Follow the comments in `.env.example` to create two recurring Prices
+     (Pro, Business), grab your secret key, and add a webhook endpoint at
+     `/api/stripe/webhook`. Set `NEXT_PUBLIC_APP_URL`.
+   - Use test mode and the Stripe CLI (`stripe listen --forward-to
+     localhost:3000/api/stripe/webhook`) while developing.
+   - Prices in `lib/plans.ts` are suggestions; edit them, then make the
+     Stripe Prices match.
+
+6. **Install and run**
    ```bash
    npm install
    npm run dev
@@ -87,8 +96,13 @@ arrive). Google: click through the consent screen, no email needed.
 | User profile | **Real.** `profiles` table, one row per user, created automatically on signup. |
 | History | **Real.** `history` table, row-level security scoped to `auth.uid()` — a user can only ever query their own rows, enforced by Postgres. |
 | Delete account | **Real.** `app/api/account/delete/route.ts` deletes the `auth.users` row; `profiles` and `history` cascade-delete with it. |
+| Share links | **Real.** `/share/[slug]` is a public, no-login page for a single history item a user has opted to share — enforced by a dedicated RLS policy (`share_slug is not null`), not by app code. |
 | Per-IP rate limiting | **Real, when Upstash is configured.** Falls back to a single-instance in-memory limiter otherwise (see `lib/rateLimit.ts`) — the app works either way, but only the Upstash-backed version holds up across multiple serverless instances. |
-| Pricing / usage meter | **Demo.** Calculated correctly and live from real attempts and text length, but nothing is actually charged, and it isn't persisted — it resets on refresh even when signed in. See "Next steps" to make this real. |
+| Subscriptions | **Real (needs your Stripe account).** Free / Pro / Business plans in `lib/plans.ts`; Stripe Checkout + Customer Portal; plan changes come from signed Stripe webhooks (`app/api/stripe/webhook`), never from the client. |
+| Usage limits | **Real.** Each generation by a signed-in user is written to `usage_events` by the server; `/api/generate` enforces the plan's monthly cap (HTTP 402 when reached). Signed-out use is allowed and only IP rate-limited. |
+| Public API | **Real.** `POST /api/v1/generate` with an `sk_chalk_…` key (Pro/Business only). Keys are stored as SHA-256 hashes; shown once at creation. |
+| Limit-warning email | **Real if Resend is configured**, skipped silently otherwise. |
+| Team / organization accounts | **Not built.** See "Next steps". |
 | Terms / Privacy pages | **Template.** Accurate to what this codebase does, but not reviewed by a lawyer. Update before real use. |
 
 ## Project structure
@@ -101,9 +115,13 @@ app/
   pricing/page.tsx        plans, calculator, usage meter (client component)
   terms/page.tsx           static
   privacy/page.tsx          static
+  share/[slug]/page.tsx      public, no-login view of one shared history item
+  share/[slug]/not-found.tsx  shown for an invalid/unshared slug
   api/
     generate/route.ts        server-side Gemini call
     account/delete/route.ts    deletes a user's account (service role)
+    stripe/checkout|portal|webhook/route.ts   billing
+    v1/generate/route.ts       public API, API-key auth
   auth/
     callback/route.ts          exchanges the magic-link code for a session
     auth-code-error/page.tsx    fallback if the link is invalid/expired
@@ -125,18 +143,13 @@ supabase/schema.sql        run this in the Supabase SQL editor — tables + RLS 
 
 ## Next steps to make this a real product
 
-### 1. Real billing — Stripe metered billing
+### 1. Team / organization accounts
 
-- Create a metered Price in Stripe for the per-attempt + per-character usage
-  described in `lib/pricing.ts`.
-- From `app/api/generate/route.ts`, after a successful generation, report a
-  usage record to Stripe (`stripe.billing.meterEvents.create` for the new
-  Billing Meters API, or `subscriptionItems.createUsageRecord` for the
-  legacy API) using the *same* formula as `estimateCost()` — the client-side
-  numbers in this repo are for display only and must not be the billing
-  source of truth.
-- Add a Stripe Checkout / Customer Portal flow so users can add a payment
-  method once they exceed the free tier.
+Deliberately not built yet — it's a large, cross-cutting change rather than a
+feature: an `organizations` + `memberships` model, invites, rewriting every RLS
+policy so data can be scoped to an org as well as a user, and moving the Stripe
+customer and plan from the user to the org. Worth doing once individual plans
+are proven.
 
 ### 2. Production email — connect real SMTP
 
