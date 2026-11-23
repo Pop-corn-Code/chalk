@@ -7,9 +7,9 @@ import Footer from '@/components/Footer';
 import SignInModal from '@/components/SignInModal';
 import ThemeBody from '@/components/ThemeBody';
 
-const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk', weight: ['400', '500', '600', '700'] });
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', weight: ['400', '500', '600'] });
-const caveat = Caveat({ subsets: ['latin'], variable: '--font-caveat', weight: ['600', '700'] });
+const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk' });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const caveat = Caveat({ subsets: ['latin'], variable: '--font-caveat' });
 
 export const metadata: Metadata = {
   title: 'Chalk — turn dense text into simple pictures',

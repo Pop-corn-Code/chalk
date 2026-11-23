@@ -10,7 +10,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 // `on delete cascade` foreign keys to auth.users, so this removes
 // everything for that user in one call.
 export async function POST() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
     error: authError,
